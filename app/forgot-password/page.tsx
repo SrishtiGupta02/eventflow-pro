@@ -1,25 +1,29 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useEffect } from "react"
+import { useActionState } from "react"
+import { useSearchParams } from "next/navigation"
+import { toast } from "sonner"
 import { ArrowLeft, Loader2, MailCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Field, FieldLabel, FieldGroup } from "@/components/ui/field"
+import { Field, FieldLabel, FieldError, FieldGroup } from "@/components/ui/field"
 import { AuthShell } from "@/components/auth/auth-shell"
+import { sendResetLink, type ForgotPasswordFormState } from "./actions"
+
+const initialState: ForgotPasswordFormState | undefined = undefined
 
 export default function ForgotPasswordPage() {
-  const [loading, setLoading] = useState(false)
-  const [sent, setSent] = useState(false)
+  const searchParams = useSearchParams()
+  const sent = searchParams.get("sent") === "1"
+  const [state, formAction, pending] = useActionState(sendResetLink, initialState)
 
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      setSent(true)
-    }, 900)
-  }
+  useEffect(() => {
+    if (state?.formError) {
+      toast.error(state.formError)
+    }
+  }, [state])
 
   return (
     <AuthShell
@@ -40,7 +44,7 @@ export default function ForgotPasswordPage() {
             reset your password within a few minutes. Be sure to check your spam
             folder.
           </p>
-          <Button variant="outline" onClick={() => setSent(false)}>
+          <Button variant="outline" render={<Link href="/forgot-password" />}>
             Resend email
           </Button>
           <Button variant="ghost" render={<Link href="/login" />}>
@@ -50,19 +54,28 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <>
-          <form onSubmit={onSubmit}>
+          <form action={formAction}>
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
                   placeholder="you@company.com"
+                  aria-invalid={!!state?.fieldErrors?.email}
                   required
                 />
+                <FieldError
+                  errors={
+                    state?.fieldErrors?.email
+                      ? [{ message: state.fieldErrors.email }]
+                      : undefined
+                  }
+                />
               </Field>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && (
+              <Button type="submit" className="w-full" disabled={pending}>
+                {pending && (
                   <Loader2 data-icon="inline-start" className="animate-spin" />
                 )}
                 Send reset link
