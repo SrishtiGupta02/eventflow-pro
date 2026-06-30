@@ -120,13 +120,14 @@ export async function signup(
   }
 
   try {
-    await provisionProfile(supabase, data.user, orgName, fullName)
-  } catch {
-    return {
-      formError:
-        "Your account was created, but we couldn't finish setting up your organization. Please try signing in.",
-    }
+  await provisionProfile(supabase, data.user, orgName, fullName)
+} catch (e) {
+  console.error(e)
+
+  return {
+    formError: e instanceof Error ? e.message : JSON.stringify(e),
   }
+}
 
   redirect("/dashboard")
 }

@@ -1,135 +1,87 @@
-# 🎟️ EventFlow Pro
+# EventFlow Pro
 
-> A modern event management platform built with **Next.js**, **TypeScript**, **Supabase**, and **Tailwind CSS**.
+White-label, multi-tenant event management prototype for ticket sales, manual UPI verification, QR ticketing, and gate check-in.
 
-> 🚧 **Status:** Work in Progress
+## Current Status
 
----
+Implemented:
+- Supabase Auth pages: signup, login, forgot/reset password, protected dashboard routing.
+- Multi-tenant data model with RLS migrations for tenants, users, events, ticket tiers, orders, payments, tickets, check-ins, verification queue, and jobs.
+- Organizer dashboard with event creation/editing and ticket tier creation/editing.
+- Atomic order reservation RPC that locks tier inventory and issues ticket rows.
+- Manual UPI submission and organizer approval flow backed by `verification_queue`.
+- Queue-ready job records for UPI review, ticket QR asset generation, and ticket email notification.
+- Web check-in page with duplicate-scan prevention and day-aware validation support.
 
-## 📌 Overview
+Not implemented yet:
+- Razorpay checkout/webhook route handlers.
+- Cloudinary direct upload widget/API for payment screenshots and QR/PDF assets.
+- Supabase Realtime client subscriptions for live order/payment/check-in dashboards.
+- Public attendee checkout pages by event slug/subdomain/domain.
+- Student ID upload/review UI.
+- Worker process for the `jobs` table.
+- Deployment, private GitHub sharing, and Loom walkthrough.
 
-EventFlow Pro is an end-to-end event management platform that enables organizers to:
+## Tech Stack
 
-- Create and manage events
-- Sell tickets
-- Verify payments
-- Generate QR tickets
-- Check in attendees
-- Track analytics
+- Next.js App Router with TypeScript
+- Supabase PostgreSQL/Auth/RLS
+- Tailwind CSS and shadcn-style UI components
+- Cloudinary and Razorpay integration points planned
 
-This project is being built as a production-style SaaS application using modern web technologies.
+Note: this repo currently uses Next.js `16.2.6`. The original brief asked for Next.js 14, so either downgrade deliberately or document the accepted version change before final delivery.
 
----
-
-## ✨ Features (Planned)
-
-- ✅ Authentication (Supabase Auth)
-- 🚧 Multi-tenant Architecture
-- 🚧 Event Management
-- 🚧 Ticket Management
-- 🚧 QR Code Generation
-- 🚧 QR Check-in System
-- 🚧 Payment Verification
-- 🚧 Analytics Dashboard
-- 🚧 Organizer Dashboard
-- 🚧 Responsive UI
-
----
-
-## 🛠️ Tech Stack
-
-### Frontend
-- Next.js 16
-- React 19
-- TypeScript
-- Tailwind CSS
-- shadcn/ui
-
-### Backend
-- Supabase
-- PostgreSQL
-- Row Level Security (RLS)
-
-### Tools
-- Git
-- GitHub
-- Vercel (planned)
-
----
-
-## 📂 Project Structure
-
-```
-app/
-components/
-hooks/
-lib/
-public/
-```
-
----
-
-## 🚀 Getting Started
-
-Clone the repository
-
-```bash
-git clone https://github.com/SrishtiGupta02/eventflow-pro.git
-```
-
-Install dependencies
+## Setup
 
 ```bash
 npm install
+npm.cmd run dev
 ```
 
-Run development server
+PowerShell on Windows may block `npm`; use `npm.cmd` if you see an execution policy error.
 
-```bash
-npm run dev
-```
+## Environment Variables
 
----
-
-## 🔐 Environment Variables
-
-Create a `.env.local`
+Create `.env.local`:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=your_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Needed for the remaining payment/asset work
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
+RAZORPAY_WEBHOOK_SECRET=
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
 ```
 
----
+## Database
 
-## 📅 Development Progress
+Run migrations in `supabase/migrations` in filename order.
 
-- [x] Project Setup
-- [x] GitHub Repository
-- [x] Supabase Setup
-- [x] Database Schema
-- [x] Row Level Security (RLS)
-- [x] Supabase Client Configuration
-- [ ] Authentication
-- [ ] Dashboard
-- [ ] Event CRUD
-- [ ] Ticket Booking
-- [ ] Payment Verification
-- [ ] QR Generation
-- [ ] QR Check-in
-- [ ] Analytics
-- [ ] Deployment
+Important migrations:
+- `001_initial_schema.sql`: core tables, constraints, indexes, triggers.
+- `002_rls.sql`: tenant isolation and role-aware RLS policies.
+- `0003_signup_provisioning.sql`: signup tenant/user provisioning RPC.
+- `0004_order_checkout_transaction.sql`: atomic ticket reservation RPC.
+- `0005_tenant_tiers_day_scans.sql`: direct `ticket_tiers.tenant_id`, event-day validity fields, and updated checkout RPC.
 
----
+## Scalability Decisions
 
-## 📈 Current Status
+- Tenant isolation is enforced in PostgreSQL through RLS, not only in UI filters.
+- Server actions/API-style handlers are stateless and derive tenant context from Supabase auth each request.
+- Ticket reservation uses a database transaction and row lock to prevent overselling.
+- Slow operations are represented as rows in `jobs`, ready for a worker or scheduled function.
+- Payment verification is separated from the financial ledger through `verification_queue`.
+- Core query paths include tenant/status/date indexes in the schema.
+- Tenant soft limits are modeled on `tenants.settings` and should be enforced in route handlers before production.
 
-🚧 Actively under development.
+## Verification
 
-New features are being implemented incrementally.
+```bash
+npm.cmd run build
+```
 
----
-
-## 📄 License
-
-This project is currently for educational and portfolio purposes.
+Known local issue: `npm.cmd run lint` currently fails because `eslint` is not installed even though the script exists.

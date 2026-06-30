@@ -105,6 +105,12 @@ export default async function DashboardEventsPage() {
                       >
                         Edit
                       </Link>
+                      <Link
+                        href={`/dashboard/events/${event.id}/edit/ticket-tiers`}
+                        className="rounded-lg border border-border/70 bg-background px-3 py-2 text-sm text-foreground transition hover:bg-muted"
+                      >
+                        Ticket Tiers
+                      </Link>
                       <form action={deleteEvent}>
                         <input type="hidden" name="eventId" value={event.id} />
                         <Button type="submit" variant="destructive" size="sm">

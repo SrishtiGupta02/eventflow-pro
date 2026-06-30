@@ -14,6 +14,17 @@ interface TicketTierRow {
   event_title: string
 }
 
+interface TicketTierQueryRow {
+  id: string
+  name: string
+  price_minor: number
+  currency: string
+  quantity_total: number
+  quantity_sold: number
+  event_id: string
+  events?: { title: string } | { title: string }[] | null
+}
+
 function formatCurrency(minorUnits: number, currency = "INR") {
   const majorUnits = minorUnits / 100
   return new Intl.NumberFormat("en-IN", {
@@ -45,10 +56,14 @@ export default async function DashboardOrdersPage() {
         .order("name", { ascending: true })
     : { data: [] }
 
-  const normalizedTiers = tiers?.map((tier) => ({
-    ...tier,
-    event_title: (tier as any).events?.title ?? "",
-  })) ?? []
+  const normalizedTiers: TicketTierRow[] = (tiers as TicketTierQueryRow[] | null)?.map((tier) => {
+    const eventRelation = Array.isArray(tier.events) ? tier.events[0] : tier.events
+
+    return {
+      ...tier,
+      event_title: eventRelation?.title ?? "",
+    }
+  }) ?? []
 
   return (
     <div className="space-y-8">

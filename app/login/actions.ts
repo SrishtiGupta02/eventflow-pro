@@ -1,7 +1,7 @@
 "use server"
 
 import { redirect } from "next/navigation"
-import type { SupabaseClient } from "@supabase/supabase-js"
+import type { SupabaseClient, User } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
 import { loginSchema } from "@/lib/validations/login"
 
@@ -43,6 +43,41 @@ function mapAuthError(message: string): string {
     return "Too many attempts. Please wait a moment and try again."
   }
   return "Something went wrong signing in. Please try again."
+}
+
+// Same provisioning step performed at signup (see provisionProfile in
+// app/signup/actions.ts), repeated here because that path is skipped when
+// email confirmation is required — there's no session yet at signup time,
+// so the tenant/owner row never gets created until the user's first login.
+// Safe to call on every login: it first checks whether a profile already
+// exists and no-ops if so.
+async function provisionProfile(supabase: SupabaseClient, user: User) {
+  const { data: existing, error: lookupError } = await supabase
+    .from("users")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle()
+
+  if (lookupError) throw lookupError
+  if (existing) return
+
+  const orgName = user.user_metadata?.org_name ?? ""
+  const fullName = user.user_metadata?.full_name ?? ""
+
+  if (!orgName) {
+    throw new Error("Missing organization name on user metadata")
+  }
+
+  const { error: rpcError } = await supabase.rpc("provision_tenant_and_owner", {
+    p_org_name: orgName,
+    p_full_name: fullName,
+  })
+  if (rpcError) throw rpcError
+
+  // The access token from signInWithPassword was minted before this profile
+  // (and its tenant_id/role claims) existed. Force a refresh so the session
+  // cookie carries a token with the correct claims before /dashboard loads.
+  await supabase.auth.refreshSession()
 }
 
 export async function signIn(
@@ -88,6 +123,15 @@ export async function signIn(
 
   if (!data.session) {
     redirect("/verify-email")
+  }
+
+  try {
+    await provisionProfile(supabase, data.user)
+  } catch {
+    return {
+      formError:
+        "Your account exists, but we couldn't finish setting up your organization. Please try again or contact support.",
+    }
   }
 
   redirect("/dashboard")

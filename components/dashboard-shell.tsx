@@ -1,15 +1,28 @@
+"use client"
+
 import { LogOut as Logout } from "lucide-react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { logout } from "@/app/dashboard/actions"
 import type { User } from "@supabase/supabase-js"
 import type { ReactNode } from "react"
+import { cn } from "@/lib/utils"
 
 export type DashboardShellProps = {
   user: User
   children: ReactNode
 }
 
+const navLinks = [
+  { href: "/dashboard", label: "Dashboard" },
+  { href: "/dashboard/events", label: "Events" },
+  { href: "/dashboard/orders", label: "Orders" },
+  { href: "/dashboard/check-in", label: "Check-in" },
+]
+
 export function DashboardShell({ user, children }: DashboardShellProps) {
+  const pathname = usePathname()
 
   return (
     <div className="min-h-screen bg-background">
@@ -27,6 +40,29 @@ export function DashboardShell({ user, children }: DashboardShellProps) {
             </Button>
           </form>
         </div>
+        <nav className="mx-auto mt-6 flex max-w-6xl flex-wrap gap-2">
+          {navLinks.map((link) => {
+            const isActive =
+              link.href === "/dashboard"
+                ? pathname === "/dashboard"
+                : pathname === link.href || pathname.startsWith(`${link.href}/`)
+
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "rounded-lg border border-border/70 px-3 py-2 text-sm transition",
+                  isActive
+                    ? "bg-foreground text-background"
+                    : "bg-background text-foreground hover:bg-muted"
+                )}
+              >
+                {link.label}
+              </Link>
+            )
+          })}
+        </nav>
       </div>
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">{children}</main>
     </div>

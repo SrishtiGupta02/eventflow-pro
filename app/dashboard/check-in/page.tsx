@@ -58,6 +58,11 @@ export default function CheckInPage() {
               />
             </Field>
 
+            <Field>
+              <FieldLabel htmlFor="scanDate">Event day</FieldLabel>
+              <Input id="scanDate" name="scanDate" type="date" />
+            </Field>
+
             {state?.successMessage ? (
               <div className="rounded-3xl border border-success/50 bg-success/10 p-4 text-sm text-success">
                 {state.successMessage}

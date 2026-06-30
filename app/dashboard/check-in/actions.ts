@@ -38,6 +38,11 @@ async function getCurrentUserId(supabase: SupabaseClient) {
   return data.user?.id ?? null
 }
 
+function relationTitle(value: { title?: string | null } | { title?: string | null }[] | null | undefined) {
+  const relation = Array.isArray(value) ? value[0] : value
+  return relation?.title ?? null
+}
+
 async function insertCheckInAudit(
   supabase: SupabaseClient,
   ticketId: string,
@@ -45,7 +50,8 @@ async function insertCheckInAudit(
   tenantId: string,
   staffId: string,
   status: string,
-  gateName: string
+  gateName: string,
+  scanDate: string | null
 ) {
   const { error } = await supabase.from("check_ins").insert({
     ticket_id: ticketId,
@@ -55,6 +61,7 @@ async function insertCheckInAudit(
     status,
     gate_name: gateName,
     device_info: "web",
+    scan_date: scanDate,
   })
   return error
 }
@@ -66,6 +73,7 @@ export async function checkInTicket(
   const rawInput = formData.get("ticketCode")?.toString() ?? ""
   const ticketCode = normalizeScanPayload(rawInput)
   const gateName = formData.get("gateName")?.toString().trim() ?? "Main gate"
+  const scanDate = formData.get("scanDate")?.toString() || null
 
   if (!ticketCode) {
     return { formError: "Scan a valid ticket QR or enter the ticket code." }
@@ -91,7 +99,7 @@ export async function checkInTicket(
   const { data: ticketData, error: ticketError } = await supabase
     .from("tickets")
     .select(
-      "id,order_id,event_id,tenant_id,holder_name,holder_email,status,ticket_code,qr_signature,ticket_tiers(name),events(title)"
+      "id,order_id,event_id,tenant_id,holder_name,holder_email,status,ticket_code,qr_signature,valid_event_dates,ticket_tiers(name),events(title)"
     )
     .eq("ticket_code", ticketCode)
     .maybeSingle()
@@ -105,7 +113,7 @@ export async function checkInTicket(
     const { data: signatureTicketData, error: signatureError } = await supabase
       .from("tickets")
       .select(
-        "id,order_id,event_id,tenant_id,holder_name,holder_email,status,ticket_code,qr_signature,ticket_tiers(name),events(title)"
+        "id,order_id,event_id,tenant_id,holder_name,holder_email,status,ticket_code,qr_signature,valid_event_dates,ticket_tiers(name),events(title)"
       )
       .eq("qr_signature", ticketCode)
       .maybeSingle()
@@ -138,6 +146,36 @@ export async function checkInTicket(
     }
   }
 
+  const validEventDates = Array.isArray(ticket.valid_event_dates)
+    ? (ticket.valid_event_dates as string[])
+    : null
+  const eventTitle = relationTitle(ticket.events)
+
+  if (scanDate && validEventDates?.length && !validEventDates.includes(scanDate)) {
+    await insertCheckInAudit(
+      supabase,
+      ticket.id,
+      ticket.event_id,
+      ticket.tenant_id,
+      staffId,
+      "invalid",
+      gateName,
+      scanDate
+    )
+
+    return {
+      formError: "This ticket is not valid for the selected event day.",
+      ticket: {
+        ticketCode: ticket.ticket_code,
+        qrSignature: ticket.qr_signature,
+        holderName: ticket.holder_name,
+        holderEmail: ticket.holder_email,
+        status: ticket.status,
+        eventTitle,
+      },
+    }
+  }
+
   if (ticket.status === "checked_in") {
     await insertCheckInAudit(
       supabase,
@@ -146,7 +184,8 @@ export async function checkInTicket(
       ticket.tenant_id,
       staffId,
       "duplicate",
-      gateName
+      gateName,
+      scanDate
     )
 
     return {
@@ -157,7 +196,7 @@ export async function checkInTicket(
         holderName: ticket.holder_name,
         holderEmail: ticket.holder_email,
         status: ticket.status,
-        eventTitle: ticket.events?.title,
+        eventTitle,
       },
     }
   }
@@ -170,7 +209,8 @@ export async function checkInTicket(
       ticket.tenant_id,
       staffId,
       "invalid",
-      gateName
+      gateName,
+      scanDate
     )
 
     return {
@@ -181,7 +221,7 @@ export async function checkInTicket(
         holderName: ticket.holder_name,
         holderEmail: ticket.holder_email,
         status: ticket.status,
-        eventTitle: ticket.events?.title,
+        eventTitle,
       },
     }
   }
@@ -213,7 +253,8 @@ export async function checkInTicket(
         ticket.tenant_id,
         staffId,
         "duplicate",
-        gateName
+        gateName,
+        scanDate
       )
 
       return {
@@ -224,7 +265,7 @@ export async function checkInTicket(
           holderName: ticket.holder_name,
           holderEmail: ticket.holder_email,
           status: "checked_in",
-          eventTitle: ticket.events?.title,
+          eventTitle,
         },
       }
     }
@@ -239,7 +280,8 @@ export async function checkInTicket(
     ticket.tenant_id,
     staffId,
     "success",
-    gateName
+    gateName,
+    scanDate
   )
 
   if (auditError) {
@@ -254,7 +296,7 @@ export async function checkInTicket(
       holderName: updatedTicket.holder_name,
       holderEmail: updatedTicket.holder_email,
       status: updatedTicket.status,
-      eventTitle: updatedTicket.events?.title,
+      eventTitle,
     },
   }
 }

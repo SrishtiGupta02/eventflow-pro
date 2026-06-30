@@ -34,16 +34,16 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data } = await supabase.auth.getSession()
-  const session = data.session
+  const { data } = await supabase.auth.getUser()
+  const user = data.user
   const pathname = url.pathname
 
-  if (isProtectedRoute(pathname) && !session) {
+  if (isProtectedRoute(pathname) && !user) {
     url.pathname = '/login'
     return NextResponse.redirect(url)
   }
 
-  if (isPublicAuthRoute(pathname) && session) {
+  if (isPublicAuthRoute(pathname) && user) {
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }

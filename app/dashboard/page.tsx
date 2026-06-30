@@ -27,10 +27,6 @@ type DashboardOrder = {
   created_at: string
 }
 
-type RevenueResult = {
-  sum: number | null
-}
-
 function formatCurrency(minorUnits: number, currency = "INR") {
   const majorUnits = minorUnits / 100
   return new Intl.NumberFormat("en-IN", {
@@ -61,7 +57,7 @@ export default async function DashboardPage() {
     ordersCountResult,
     paymentsCountResult,
     ticketsSoldCountResult,
-    revenueResult,
+    paidOrdersResult,
     recentEventsResult,
     recentOrdersResult,
   ] = await Promise.all([
@@ -101,9 +97,10 @@ export default async function DashboardPage() {
     tenantId
       ? supabase
           .from("orders")
-          .select("sum:total_amount_minor", { head: true, count: "exact" })
+          .select("total_amount_minor")
           .eq("tenant_id", tenantId)
-      : Promise.resolve({ data: null, count: 0, error: null }),
+          .eq("status", "paid")
+      : Promise.resolve({ data: [] as { total_amount_minor: number }[] }),
     tenantId
       ? supabase
           .from("events")
@@ -129,7 +126,11 @@ export default async function DashboardPage() {
   const totalOrders = ordersCountResult.count ?? 0
   const totalPayments = paymentsCountResult.count ?? 0
   const ticketsSold = ticketsSoldCountResult.count ?? 0
-  const revenue = revenueResult.data?.sum ?? 0
+  const revenue =
+    paidOrdersResult.data?.reduce(
+      (total, order) => total + order.total_amount_minor,
+      0
+    ) ?? 0
   const currency = "INR"
   const recentEvents = recentEventsResult.data ?? []
   const recentOrders = recentOrdersResult.data ?? []

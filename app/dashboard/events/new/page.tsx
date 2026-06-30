@@ -1,11 +1,19 @@
+"use client"
+
+import { useActionState } from "react"
 import { Button } from "@/components/ui/button"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import Link from "next/link"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { createEvent } from "@/app/dashboard/events/actions"
+import { createEvent, type EventFormState } from "@/app/dashboard/events/actions"
+
+const initialState: EventFormState = null
 
 export default function NewEventPage() {
+  const [state, formAction, pending] = useActionState(createEvent, initialState)
+
   return (
     <div className="space-y-8">
       <div className="rounded-3xl border border-border/70 bg-card p-8 shadow-sm shadow-muted/10">
@@ -19,11 +27,14 @@ export default function NewEventPage() {
           </p>
         </div>
 
-        <form action={createEvent} className="space-y-6">
+        <form action={formAction} className="space-y-6">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="title">Title</FieldLabel>
               <Input id="title" name="title" placeholder="Summer Concert" required />
+              {state?.fieldErrors?.title ? (
+                <p className="text-sm text-destructive">{state.fieldErrors.title}</p>
+              ) : null}
             </Field>
 
             <Field>
@@ -99,7 +110,9 @@ export default function NewEventPage() {
             </Field>
 
             <div className="flex items-center gap-3">
-              <Button type="submit">Create event</Button>
+              <Button type="submit" disabled={pending}>
+                {pending ? "Creating..." : "Create event"}
+              </Button>
               <Link href="/dashboard/events" className="text-sm text-muted-foreground hover:text-foreground">
                 Cancel
               </Link>

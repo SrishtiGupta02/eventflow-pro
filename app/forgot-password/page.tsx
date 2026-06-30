@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { useEffect } from "react"
+import { Suspense, useEffect } from "react"
 import { useActionState } from "react"
 import { useSearchParams } from "next/navigation"
 import { toast } from "sonner"
@@ -12,9 +12,9 @@ import { Field, FieldLabel, FieldError, FieldGroup } from "@/components/ui/field
 import { AuthShell } from "@/components/auth/auth-shell"
 import { sendResetLink, type ForgotPasswordFormState } from "./actions"
 
-const initialState: ForgotPasswordFormState | undefined = undefined
+const initialState: ForgotPasswordFormState = null
 
-export default function ForgotPasswordPage() {
+function ForgotPasswordContent() {
   const searchParams = useSearchParams()
   const sent = searchParams.get("sent") === "1"
   const [state, formAction, pending] = useActionState(sendResetLink, initialState)
@@ -93,5 +93,13 @@ export default function ForgotPasswordPage() {
         </>
       )}
     </AuthShell>
+  )
+}
+
+export default function ForgotPasswordPage() {
+  return (
+    <Suspense>
+      <ForgotPasswordContent />
+    </Suspense>
   )
 }

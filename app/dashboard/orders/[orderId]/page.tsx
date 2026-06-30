@@ -2,6 +2,10 @@ import { createClient } from "@/lib/supabase/server"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import Link from "next/link"
+import {
+  approveManualUpiPayment,
+  submitManualUpiPayment,
+} from "@/app/dashboard/orders/actions"
 
 interface OrderRow {
   id: string
@@ -31,6 +35,13 @@ interface TicketDetailRow {
   holder_email?: string | null
 }
 
+interface VerificationQueueRow {
+  id: string
+  status: string
+  utr_reference: string
+  proof_screenshot_url?: string | null
+}
+
 function formatCurrency(minorUnits: number, currency = "INR") {
   const majorUnits = minorUnits / 100
   return new Intl.NumberFormat("en-IN", {
@@ -57,7 +68,13 @@ export default async function OrderPage({ params }: Props) {
 
   const tenantId = currentUser?.tenant_id
 
-  const [orderResult, ticketSummaryResult, ticketDetailResult, ticketCountResult] = tenantId
+  const [
+    orderResult,
+    ticketSummaryResult,
+    ticketDetailResult,
+    ticketCountResult,
+    verificationResult,
+  ] = tenantId
     ? await Promise.all([
         supabase
           .from("orders")
@@ -79,18 +96,27 @@ export default async function OrderPage({ params }: Props) {
           .from("tickets")
           .select("id", { count: "exact", head: true })
           .eq("order_id", params.orderId),
+        supabase
+          .from("verification_queue")
+          .select("id,status,utr_reference,proof_screenshot_url")
+          .eq("order_id", params.orderId)
+          .order("submitted_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ])
     : [
         { data: null },
         { data: null },
         { data: [] as TicketDetailRow[] },
         { data: null, count: 0, error: null },
+        { data: null },
       ]
 
   const order = orderResult.data
   const ticketSummary = ticketSummaryResult.data
   const ticketDetails = ticketDetailResult.data ?? []
   const quantity = ticketCountResult.count ?? 0
+  const verification = verificationResult.data as VerificationQueueRow | null
 
   if (!order || !ticketSummary || quantity === 0) {
     return (
@@ -159,9 +185,55 @@ export default async function OrderPage({ params }: Props) {
 
           <div className="rounded-3xl border border-border/70 bg-background p-6">
             <p className="text-sm font-medium text-muted-foreground">Next steps</p>
-            <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Your order has been reserved. Complete the payment flow outside this screen.
-            </p>
+            {order.status === "paid" ? (
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                Payment verified. Tickets are ready for check-in.
+              </p>
+            ) : verification?.status === "pending" ? (
+              <>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  Manual UPI proof is waiting for organizer review.
+                </p>
+                <div className="mt-4 rounded-2xl border border-border/70 bg-card p-4 text-sm text-muted-foreground">
+                  <p>UTR: {verification.utr_reference}</p>
+                  {verification.proof_screenshot_url ? (
+                    <a
+                      href={verification.proof_screenshot_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline"
+                    >
+                      View proof screenshot
+                    </a>
+                  ) : null}
+                </div>
+                <form action={approveManualUpiPayment} className="mt-6">
+                  <input type="hidden" name="orderId" value={order.id} />
+                  <Button type="submit">Approve UPI payment</Button>
+                </form>
+              </>
+            ) : (
+              <>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                  Your order has been reserved. Submit UPI details for review after payment.
+                </p>
+                <form action={submitManualUpiPayment} className="mt-6 space-y-4">
+                  <input type="hidden" name="orderId" value={order.id} />
+                  <input
+                    name="utrReference"
+                    placeholder="UPI UTR/reference"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    required
+                  />
+                  <input
+                    name="proofScreenshotUrl"
+                    placeholder="Cloudinary screenshot URL"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  />
+                  <Button type="submit">Submit UPI proof</Button>
+                </form>
+              </>
+            )}
             <div className="mt-6 flex gap-3">
               <Link href="/dashboard/orders" className="text-sm text-muted-foreground hover:text-foreground">
                 Back to orders
@@ -170,6 +242,47 @@ export default async function OrderPage({ params }: Props) {
             </div>
           </div>
         </div>
+
+        {order.status === "paid" ? (
+          <div className="mt-8">
+            <p className="mb-4 text-sm font-medium text-muted-foreground">
+              Tickets ({checkedInCount} of {quantity} checked in)
+            </p>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Holder</TableHead>
+                  <TableHead>Ticket code</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>QR code</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {ticketDetails.map((ticket) => (
+                  <TableRow key={ticket.ticket_code}>
+                    <TableCell>{ticket.holder_name}</TableCell>
+                    <TableCell>{ticket.ticket_code}</TableCell>
+                    <TableCell>{ticket.status}</TableCell>
+                    <TableCell>
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(ticket.ticket_code)}`}
+                        alt={`QR code for ticket ${ticket.ticket_code}`}
+                        width={100}
+                        height={100}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        ) : (
+          <div className="mt-8 rounded-3xl border border-border/70 bg-background p-6">
+            <p className="text-sm text-muted-foreground">
+              Tickets will be available here once payment is verified.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   )
